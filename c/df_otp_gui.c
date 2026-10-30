@@ -226,6 +226,150 @@ static void show_error(const wchar_t *message)
     set_status(message);
 }
 
+static int file_exists_w(const wchar_t *path)
+{
+    DWORD attributes = GetFileAttributesW(path);
+    return attributes != INVALID_FILE_ATTRIBUTES &&
+           (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
+}
+
+static int accept_path(const wchar_t *path, wchar_t *out, size_t out_size)
+{
+    if (!file_exists_w(path)) {
+        return 0;
+    }
+    wcsncpy(out, path, out_size - 1);
+    out[out_size - 1] = L'\0';
+    return 1;
+}
+
+static int search_tree(const wchar_t *root, wchar_t *out, size_t out_size,
+                       int depth)
+{
+    wchar_t pattern[MAX_PATH];
+    WIN32_FIND_DATAW data;
+    HANDLE handle;
+
+    if (depth > 6) {
+        return 0;
+    }
+    if (swprintf(pattern, MAX_PATH, L"%ls\\*", root) < 0) {
+        return 0;
+    }
+    handle = FindFirstFileW(pattern, &data);
+    if (handle == INVALID_HANDLE_VALUE) {
+        return 0;
+    }
+    do {
+        if (wcscmp(data.cFileName, L".") == 0 ||
+            wcscmp(data.cFileName, L"..") == 0) {
+            continue;
+        }
+        if ((data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+            wchar_t child[MAX_PATH];
+            if ((data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
+                continue;
+            }
+            if (swprintf(child, MAX_PATH, L"%ls\\%ls", root,
+                         data.cFileName) < 0) {
+                continue;
+            }
+            if (search_tree(child, out, out_size, depth + 1)) {
+                FindClose(handle);
+                return 1;
+            }
+        } else if (_wcsicmp(data.cFileName, L"Persi0.sys") == 0) {
+            wchar_t candidate[MAX_PATH];
+            if (swprintf(candidate, MAX_PATH, L"%ls\\%ls", root,
+                         data.cFileName) > 0 &&
+                accept_path(candidate, out, out_size)) {
+                FindClose(handle);
+                return 1;
+            }
+        }
+    } while (FindNextFileW(handle, &data));
+    FindClose(handle);
+    return 0;
+}
+
+static int find_persi_file(wchar_t *out, size_t out_size)
+{
+    wchar_t current[MAX_PATH];
+    wchar_t module[MAX_PATH];
+    wchar_t system_drive[MAX_PATH];
+    wchar_t program_files[MAX_PATH];
+    wchar_t program_files_x86[MAX_PATH];
+    wchar_t program_data[MAX_PATH];
+    wchar_t candidate[MAX_PATH];
+    wchar_t *slash;
+    const wchar_t *roots[3];
+    int i;
+
+    if (GetCurrentDirectoryW(MAX_PATH, current) > 0) {
+        if (swprintf(candidate, MAX_PATH, L"%ls\\Persi0.sys", current) > 0 &&
+            accept_path(candidate, out, out_size)) {
+            return 1;
+        }
+    }
+    if (GetModuleFileNameW(NULL, module, MAX_PATH) > 0) {
+        slash = wcsrchr(module, L'\\');
+        if (slash != NULL) {
+            *slash = L'\0';
+            if (swprintf(candidate, MAX_PATH, L"%ls\\Persi0.sys", module) > 0 &&
+                accept_path(candidate, out, out_size)) {
+                return 1;
+            }
+        }
+    }
+    if (GetEnvironmentVariableW(L"SystemDrive", system_drive, MAX_PATH) > 0) {
+        if (swprintf(candidate, MAX_PATH, L"%ls\\Persi0.sys", system_drive) > 0 &&
+            accept_path(candidate, out, out_size)) {
+            return 1;
+        }
+    }
+
+    program_files[0] = L'\0';
+    program_files_x86[0] = L'\0';
+    program_data[0] = L'\0';
+    (void)GetEnvironmentVariableW(L"ProgramFiles", program_files, MAX_PATH);
+    (void)GetEnvironmentVariableW(L"ProgramFiles(x86)", program_files_x86, MAX_PATH);
+    (void)GetEnvironmentVariableW(L"ProgramData", program_data, MAX_PATH);
+    roots[0] = program_files;
+    roots[1] = program_files_x86;
+    roots[2] = program_data;
+
+    for (i = 0; i < 3; ++i) {
+        if (roots[i][0] == L'\0') {
+            continue;
+        }
+        if (swprintf(candidate, MAX_PATH,
+                     L"%ls\\Faronics\\Deep Freeze\\Install C-0\\Persi0.sys",
+                     roots[i]) > 0 &&
+            accept_path(candidate, out, out_size)) {
+            return 1;
+        }
+        if (swprintf(candidate, MAX_PATH,
+                     L"%ls\\Faronics\\Deep Freeze\\Persi0.sys",
+                     roots[i]) > 0 &&
+            accept_path(candidate, out, out_size)) {
+            return 1;
+        }
+    }
+    for (i = 0; i < 3; ++i) {
+        if (roots[i][0] == L'\0') {
+            continue;
+        }
+        if (swprintf(candidate, MAX_PATH,
+                     L"%ls\\Faronics\\Deep Freeze", roots[i]) < 0) {
+            continue;
+        }
+        if (search_tree(candidate, out, out_size, 0)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static void generate_otp(void)
 {
     wchar_t path[MAX_PATH];
@@ -395,6 +539,28 @@ static void generate_otp(void)
     set_status(line);
 }
 
+static void auto_start(void)
+{
+    wchar_t path[MAX_PATH];
+    wchar_t found[MAX_PATH];
+
+    GetWindowTextW(g_path, path, MAX_PATH);
+    if (path[0] == L'\0' && find_persi_file(found, MAX_PATH)) {
+        SetWindowTextW(g_path, found);
+        wcsncpy(path, found, MAX_PATH - 1);
+        path[MAX_PATH - 1] = L'\0';
+    }
+    if (path[0] != L'\0') {
+        generate_otp();
+        return;
+    }
+
+    set_status(L"Persi0.sys not found. Select the file to decrypt.");
+    if (browse_for_file()) {
+        generate_otp();
+    }
+}
+
 static void copy_first_otp(void)
 {
     HGLOBAL memory;
@@ -499,9 +665,6 @@ static void create_interface(HWND window)
     df_format_date(df_today_day_index(), today);
     ascii_to_wide(today, wide_today, 16);
     SetWindowTextW(g_date, wide_today);
-    if (GetFileAttributesW(L"Persi0.sys") != INVALID_FILE_ATTRIBUTES) {
-        SetWindowTextW(g_path, L"Persi0.sys");
-    }
 }
 
 static LRESULT CALLBACK window_proc(HWND window, UINT message,
@@ -577,6 +740,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous_instance,
     }
     ShowWindow(window, show_command);
     UpdateWindow(window);
+    auto_start();
 
     while (GetMessageW(&message, NULL, 0, 0) > 0) {
         TranslateMessage(&message);

@@ -9,7 +9,7 @@ Private reverse-engineering notes for a local Deep Freeze 8.63.020.5634 sample.
 - `REPORT.md` - Vietnamese analysis report: container format, record cipher, config layout, slot decoder, driver authentication flow, findings, and AdminOTPKey/OTP analysis.
 - `tools/df_persi.py` - standalone Python 3 decoder for `Persi0.sys` records and password slots.
 - `tools/df_otp.py` - Deep Freeze 8.63 OTP generator from the `AdminOTPKey` and logon token (valid for the local calendar day).
-- `c/` - portable C11 core, CLI and native Win32 GUI; `make -C c` builds the CLI, `make -C c gui` builds `c/df_otp_gui.exe`.
+- `c/` - portable C11 core, CLI and native Win32 GUI; the GUI auto-detects `Persi0.sys` and generates today's OTP on launch. `make -C c` builds the CLI, `make -C c gui` builds `c/df_otp_gui.exe`.
 - `.gitignore` - excludes proprietary binaries, decrypted records and local secrets.
 
 ## Reproduce

@@ -66,14 +66,19 @@ Exit codes: `0` success, `1` usage/format error, `2` self-test failure.
 
 ## GUI usage
 
-Run `df_otp_gui.exe`, then:
+Run `df_otp_gui.exe`. On launch it automatically searches for `Persi0.sys` in:
 
-1. Select the `Persi0.sys` file (the current directory is checked automatically).
-2. Choose the date and number of days.
-3. Leave `AdminOTPKey`/`Token` empty to read them from the file, or enter overrides.
-4. Press `Generate OTP`.
-5. Use `Copy first OTP` to copy the first generated value.
-6. Tick `Show credential slots` to display the slot table.
+- the current working directory
+- the directory containing the EXE
+- the system drive root
+- `Program Files`, `Program Files (x86)` and `ProgramData` under
+  `Faronics\Deep Freeze` (including `Install C-0` and subdirectories)
+
+If found, it loads the file and generates today's OTP immediately. If not
+found, it opens the file dialog; after selecting a file it generates
+automatically. You can then change the date/days, override `AdminOTPKey` or
+token, tick `Show credential slots`, press `Generate OTP`, and use
+`Copy first OTP`.
 
 ## Scope
 

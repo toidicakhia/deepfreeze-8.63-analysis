@@ -530,7 +530,7 @@ c/df_otp --self-test
 make -C c gui
 ```
 
-GUI có các trường chọn `Persi0.sys`, ngày, số ngày, `AdminOTPKey`/token override, checkbox hiện slot, nút Generate, Copy first OTP và Clear. GUI đã smoke-test bằng Wine.
+GUI tự tìm `Persi0.sys` trong thư mục hiện tại, thư mục chứa EXE, gốc ổ hệ thống và `Faronics\Deep Freeze` trong Program Files/ProgramData; nếu thấy thì tự giải mã và sinh OTP hôm nay ngay khi mở. Nếu không thấy, GUI mở file dialog rồi tự sinh sau khi chọn. GUI có thêm ngày, số ngày, `AdminOTPKey`/token override, checkbox hiện slot, Generate, Copy first OTP và Clear. Đã smoke-test bằng Wine.
 
 Các điểm chính:
 
