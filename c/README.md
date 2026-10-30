@@ -1,24 +1,45 @@
-# df_otp.c
+# Deep Freeze 8.63 OTP tools (C)
 
-Portable C11 implementation of the Deep Freeze 8.63 `Persi0.sys` reader and
-daily One Time Password generator. The code is a clean-room port of the
-findings in [`../REPORT.md`](../REPORT.md); it contains no Faronics code,
+Portable C11 reader for the Deep Freeze 8.63 `Persi0.sys` file and a
+daily OTP generator, plus a native Win32 GUI. The code is a clean-room port of
+the findings in [`../REPORT.md`](../REPORT.md); it contains no Faronics code,
 private keys, or real OTP values.
+
+## Files
+
+- `df_otp_core.c` / `df_otp_core.h` - record parser, slot decoder, OTP core.
+- `df_otp.c` - command line front end.
+- `df_otp_gui.c` - native Win32 GUI front end (Unicode, no runtime DLLs).
+- `Makefile` - CLI, GUI and self-test targets.
 
 ## Build
 
 ```bash
 cd c
-make
+make          # CLI: df_otp
+make test     # built-in synthetic vectors
+make gui      # Windows GUI: df_otp_gui.exe (cross-compiled with mingw-w64)
 ```
 
-Or directly:
+Direct CLI build:
 
 ```bash
-cc -O2 -std=c11 -Wall -Wextra -Wpedantic -o df_otp df_otp.c
+cc -O2 -std=c11 -Wall -Wextra -Wpedantic -o df_otp df_otp.c df_otp_core.c
 ```
 
-## Usage
+Direct Windows GUI build with MinGW-w64:
+
+```bash
+x86_64-w64-mingw32-gcc -O2 -std=c11 -Wall -Wextra -Wpedantic \
+  -mwindows -static -static-libgcc -DUNICODE -D_UNICODE \
+  -o df_otp_gui.exe df_otp_gui.c df_otp_core.c \
+  -lcomdlg32 -lgdi32 -luser32
+```
+
+The GUI was built and smoke-tested with mingw-w64 + Wine. It is a native
+Windows GUI executable and does not require a separate runtime.
+
+## CLI usage
 
 ```bash
 # Read AdminOTPKey and token from Persi0.sys, generate today's OTP
@@ -43,6 +64,17 @@ cc -O2 -std=c11 -Wall -Wextra -Wpedantic -o df_otp df_otp.c
 
 Exit codes: `0` success, `1` usage/format error, `2` self-test failure.
 
+## GUI usage
+
+Run `df_otp_gui.exe`, then:
+
+1. Select the `Persi0.sys` file (the current directory is checked automatically).
+2. Choose the date and number of days.
+3. Leave `AdminOTPKey`/`Token` empty to read them from the file, or enter overrides.
+4. Press `Generate OTP`.
+5. Use `Copy first OTP` to copy the first generated value.
+6. Tick `Show credential slots` to display the slot table.
+
 ## Scope
 
 - Offline parser for `Persi0.sys`; works on Linux, macOS and Windows.
@@ -50,8 +82,8 @@ Exit codes: `0` success, `1` usage/format error, `2` self-test failure.
   challenge/pass/prefix algorithm and verifier.
 - Supports the runtime token override; on a live machine the token is the
   value shown by the Deep Freeze logon dialog / `0x72074` IOCTL.
-- No live driver IOCTL access is included in this file. Use Meltdown's
-  `OpenVolume()` plus `0x7207C`/`0x72074` if live extraction is needed.
+- No live driver IOCTL access is included. Use Meltdown's `OpenVolume()` plus
+  `0x7207C`/`0x72074` if live extraction is needed.
 
 ## Safety
 

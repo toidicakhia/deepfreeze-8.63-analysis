@@ -512,7 +512,11 @@ OTP sinh ra chỉ có hiệu lực trong ngày địa phương tương ứng. N�
 
 ## 13. Bản C độc lập
 
-`c/df_otp.c` là bản port C11 của phần đọc `Persi0.sys` và sinh OTP 8.63. Mã nguồn chỉ chứa thuật toán đã mô tả ở trên, không chứa code Faronics, key thật hay OTP thật.
+`c/` chứa bản port C11 của phần đọc `Persi0.sys` và sinh OTP 8.63. Mã nguồn chỉ chứa thuật toán đã mô tả ở trên, không chứa code Faronics, key thật hay OTP thật.
+
+- `df_otp_core.c` / `df_otp_core.h`: parser record, slot decoder và OTP core.
+- `df_otp.c`: CLI.
+- `df_otp_gui.c`: GUI Win32 native (Unicode), build bằng mingw-w64.
 
 ```bash
 make -C c
@@ -521,7 +525,12 @@ c/df_otp Persi0.sys --date 2026-10-30 --days 3
 c/df_otp Persi0.sys --slots
 c/df_otp Persi0.sys --json
 c/df_otp --self-test
+
+# Tạo file EXE GUI: c/df_otp_gui.exe
+make -C c gui
 ```
+
+GUI có các trường chọn `Persi0.sys`, ngày, số ngày, `AdminOTPKey`/token override, checkbox hiện slot, nút Generate, Copy first OTP và Clear. GUI đã smoke-test bằng Wine.
 
 Các điểm chính:
 
