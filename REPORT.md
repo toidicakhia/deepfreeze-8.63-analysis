@@ -58,6 +58,7 @@ Các binary không được commit vào repository.
    - Record `0x13`: danh sách tên file (`DFWks.exe`, `FrzState2k.exe`, ...).
    - Record `0x14`, `0x17`: PE image nhúng.
    - Record `-0x10`: 16 byte + chuỗi `IVZIRNAHER`, nhiều khả năng là định danh volume/partition.
+10. `AdminOTPKey` tại `config+0x0C` là CCH key dùng để sinh OTP; token tại `config+0x10`; có thể sinh OTP cho ngày địa phương hiện tại bằng `tools/df_otp.py` (xem mục 12).
 
 ---
 
@@ -372,6 +373,143 @@ slot      flags    start     stop       seed  len  password
 
 ---
 
-## 12. Ghi chú pháp lý
+## 12. Phân tích `AdminOTPKey` và One Time Password
+
+### 12.1 Vị trí và vai trò
+
+`AdminOTPKey` nằm tại `config+0x0C` (offset `0x289` trong record cấu hình cũ, tương ứng `config+649` trong driver):
+
+```text
+config+0x00  u32 slot_size
+config+0x04  u32 max_passwords
+config+0x08  u32 enable_otp
+config+0x0C  u32 AdminOTPKey   <-- CCH key
+config+0x10  char[260] OTP token
+```
+
+Trong driver:
+
+- `sub_12B70` (IOCTL `0x7207C`) đọc `AdminOTPKey`.
+- `sub_13F20` (IOCTL `0x72074`) đọc 260-byte OTP token tại `config+0x10`.
+- `sub_2E680` nạp `AdminOTPKey` vào đối tượng kiểm tra chữ ký.
+- `sub_2E350` dùng key này để tạo pass OTP 8 hex.
+- `sub_1D030` dùng nó trong nhánh fallback để xác thực OTP.
+
+Trong tài liệu Faronics, đây là **CCH key** dùng bởi OTP Generator: workstation hiển thị **OTP Token**, admin nhập token + key vào Configuration Administrator/Console để sinh OTP. OTP hết hạn vào **nửa đêm theo giờ địa phương**.
+
+### 12.2 Token hiển thị trên logon dialog
+
+Form `TFormLogon` có `LabelToken` cạnh label `OTP Token:`. Khi form hiện, code gọi `sub_464258`, tương ứng IOCTL `0x72074`, đọc 260 byte tại `config+0x10` và hiển thị chuỗi đó.
+
+Trong mẫu này `config+0x10` là toàn số 0, nên token hiển thị rỗng/`00000000`. Nếu máy thật hiển thị token khác, script có thể nhận token đó bằng `--token`.
+
+### 12.3 Thuật toán OTP 8.63
+
+Driver dùng 3 hàm chính:
+
+1. `sub_2E5C0` — tạo challenge theo ngày:
+
+```text
+v4 = hex_parse(config_token)
+v5 = (local_unix_seconds / 86400) << 8
+challenge = "%08X:%08X" % (v4 ^ v5, hash("%08X" % v5))
+```
+
+2. `sub_2E350` — tạo pass 8 hex từ challenge và `AdminOTPKey`:
+
+```text
+v8 = AdminOTPKey ^ hash("Igor Zagoruchenko") ^ hex_parse(challenge)
+
+if AdminOTPKey != 0:
+    x  = signed16(v8 ^ (v8 >> 16))
+    v9 = 32597 * (x % 177) + 2 * (x / 177)
+    hi = signed16(v8 >> 16)
+    v10 = v8 ^ (2 * (hi / 177) + 32597 * (hi % 177))
+else:
+    ... nhánh key = 0 ...
+
+pass = "%04X%04X" % (v9 & 0xFFFF, v10 & 0xFFFF)
+```
+
+3. `sub_2E300` — hash không dấu key, dùng cho prefix:
+
+```text
+prefix = first 4 chars of "%X" % hash(pass.lower())
+OTP    = prefix + "-" + pass
+```
+
+Chuỗi `"Igor Zagoruchenko"` là hằng số hard-code trong `sub_2E350`; hash của nó là `0x03F705CF`.
+
+### 12.4 Kiểm tra OTP trong driver
+
+Luồng login fallback:
+
+```text
+sub_1D030
+  -> sub_2E5C0(config_token, today)       // challenge
+  -> sub_2E680(key = AdminOTPKey)
+  -> sub_2E690(challenge, input, ...)
+       -> tách input tại '-'
+       -> prefix == first 4 of hash(suffix) ?
+       -> sub_2E540 -> sub_2E350(challenge, key) == suffix ?
+  -> nếu đúng: rights = 32 khi có '-', ngược lại rights = 4
+```
+
+Vì vậy OTP đúng cho mẫu này có dạng `XXXX-XXXXXXXX` và có hiệu lực trong ngày địa phương hiện tại.
+
+### 12.5 Test vector tổng hợp (không dùng key thật)
+
+Để kiểm chứng implementation mà không đưa key/OTP thật vào repo:
+
+```text
+key        = 0x11223344
+token      = 00000000
+date       = 2026-10-30
+challenge  = 00511400:03844400
+pass       = C46C868D
+OTP        = 7C6B-C46C868D
+verify     = OK
+```
+
+Test vector này được tạo bởi `tools/df_otp.py --key 0x11223344 --token 00000000 --date 2026-10-30`.
+
+### 12.6 So sánh với Meltdown cũ
+
+Meltdown hỗ trợ Enterprise 5.x–8.31.x:
+
+- Dùng `OTP_CR("igor zagoruchenko")`, `OTP_HL` với hệ số `32767`, pass 16 hex.
+- `OTP_RequestCCH` đọc key tại `config+0x289`.
+- `OTP_Generate` tạo `prefix-pass` từ token và CCH.
+
+Bản 8.63 vẫn giữ cấu trúc `prefix-pass`, nhưng:
+
+- Pass chỉ còn **8 hex**.
+- Hàm biến đổi dùng `32597` và `2`, không phải `32767`/`171`.
+- Challenge được tạo theo **ngày** bằng `sub_2E5C0`.
+- Token được đọc từ `config+0x10` qua IOCTL `0x72074`.
+
+Vì vậy công cụ Meltdown cũ không sinh đúng OTP cho 8.63; cần dùng `tools/df_otp.py`.
+
+### 12.7 Cách dùng
+
+```bash
+# Đọc key + token từ Persi0.sys, sinh OTP cho hôm nay
+python3 tools/df_otp.py Persi0.sys
+
+# Chọn ngày cụ thể
+python3 tools/df_otp.py Persi0.sys --date 2026-10-30
+
+# In nhiều ngày
+python3 tools/df_otp.py Persi0.sys --date 2026-10-30 --days 3
+
+# Nếu token trên logon dialog khác với file
+python3 tools/df_otp.py Persi0.sys --token <token>
+```
+
+OTP sinh ra chỉ có hiệu lực trong ngày địa phương tương ứng. Nếu máy thật dùng timezone khác hoặc token runtime khác file, cần chạy script với token/ngày tương ứng.
+
+---
+
+## 13. Ghi chú pháp lý
 
 Phân tích chỉ nên thực hiện trên hệ thống do bạn sở hữu hoặc có quyền kiểm thử. Repository không chứa binary gốc, license key hay OTP key đầy đủ.
