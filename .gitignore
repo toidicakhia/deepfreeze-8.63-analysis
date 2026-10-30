@@ -1,0 +1,32 @@
+# Proprietary Deep Freeze binaries and original samples
+*.sys
+*.exe
+*.dll
+*.rar
+*.zip
+
+# IDA databases and analysis files
+*.id0
+*.id1
+*.id2
+*.nam
+*.til
+*.i64
+*.idb
+
+# Decrypted / extracted artifacts
+out/
+records/
+df_recs/
+df_rec0.bin
+artifacts/
+
+# Local secrets and notes
+LOCAL_ONLY_SECRETS.md
+PRIVATE_FINDINGS.md
+secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
