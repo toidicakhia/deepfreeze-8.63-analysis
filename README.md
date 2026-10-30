@@ -9,6 +9,7 @@ Private reverse-engineering notes for a local Deep Freeze 8.63.020.5634 sample.
 - `REPORT.md` - Vietnamese analysis report: container format, record cipher, config layout, slot decoder, driver authentication flow, findings, and AdminOTPKey/OTP analysis.
 - `tools/df_persi.py` - standalone Python 3 decoder for `Persi0.sys` records and password slots.
 - `tools/df_otp.py` - Deep Freeze 8.63 OTP generator from the `AdminOTPKey` and logon token (valid for the local calendar day).
+- `c/df_otp.c` - portable C11 reader/OTP generator; builds with `make -C c`, self-tests with `c/df_otp --self-test`.
 - `.gitignore` - excludes proprietary binaries, decrypted records and local secrets.
 
 ## Reproduce
@@ -17,6 +18,10 @@ Private reverse-engineering notes for a local Deep Freeze 8.63.020.5634 sample.
 python3 tools/df_persi.py Persi0.sys
 python3 tools/df_persi.py Persi0.sys --dump-records out/
 python3 tools/df_otp.py Persi0.sys --date 2026-10-30
+
+make -C c
+c/df_otp Persi0.sys --date 2026-10-30
+c/df_otp --self-test
 ```
 
 ## Safety

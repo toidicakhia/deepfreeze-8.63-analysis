@@ -30,3 +30,8 @@ secrets/
 __pycache__/
 *.py[cod]
 .venv/
+
+# C build output
+c/df_otp
+c/df_otp.exe
+c/*.o

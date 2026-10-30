@@ -510,6 +510,31 @@ OTP sinh ra chỉ có hiệu lực trong ngày địa phương tương ứng. N�
 
 ---
 
-## 13. Ghi chú pháp lý
+## 13. Bản C độc lập
+
+`c/df_otp.c` là bản port C11 của phần đọc `Persi0.sys` và sinh OTP 8.63. Mã nguồn chỉ chứa thuật toán đã mô tả ở trên, không chứa code Faronics, key thật hay OTP thật.
+
+```bash
+make -C c
+c/df_otp Persi0.sys --date 2026-10-30
+c/df_otp Persi0.sys --date 2026-10-30 --days 3
+c/df_otp Persi0.sys --slots
+c/df_otp Persi0.sys --json
+c/df_otp --self-test
+```
+
+Các điểm chính:
+
+- Đọc trực tiếp record 0 của `Persi0.sys`, decrypt bằng cipher `30747/177/32597`.
+- Lấy `AdminOTPKey` tại `config+0x0C` và token 260 byte tại `config+0x10`.
+- Cài đặt `df_hash`, `make_pass`, `make_otp`, `verify_otp` và prefix 4 ký tự.
+- Có `--key`/`--token` để test với vector giả; `--self-test` dùng key `0x11223344` và token rỗng, không cần file.
+- Chạy được trên Linux/macOS/Windows; phần live IOCTL `0x7207C`/`0x72074` không nằm trong bản C này.
+
+Kết quả C đã đối chiếu với `tools/df_otp.py` trên cùng ngày và cùng vector giả.
+
+---
+
+## 14. Ghi chú pháp lý
 
 Phân tích chỉ nên thực hiện trên hệ thống do bạn sở hữu hoặc có quyền kiểm thử. Repository không chứa binary gốc, license key hay OTP key đầy đủ.

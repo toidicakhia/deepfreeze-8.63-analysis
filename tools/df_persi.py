@@ -141,7 +141,7 @@ def parse_config(record0: bytes) -> tuple[dict, list[dict]]:
         "max_passwords": max_passwords,
         "enable_otp": enable_otp,
         "admin_otp_key": admin_otp_key,
-        "signature_area": cfg[CONFIG_SIZE:CONFIG_SIZE],  # empty; kept for clarity
+        "signature_area": cfg[CONFIG_SIZE:CONFIG_SIZE].hex(),  # empty; kept for clarity
     }
 
     slots: list[dict] = []
